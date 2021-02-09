@@ -27,6 +27,8 @@ func loop(conn *i2c.Options) {
 		// Alternate LED
 
 		if !on {
+			log.Println("Turning ON")
+
 			_, err := conn.WriteBytes([]byte{0x1})
 			if err != nil {
 				log.Fatal(err)
@@ -34,13 +36,14 @@ func loop(conn *i2c.Options) {
 
 			on = true
 		} else {
+			log.Println("Turning OFF")
+
 			_, err := conn.WriteBytes([]byte{0x0})
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			on = true
-
+			on = false
 		}
 
 		time.Sleep(2 * time.Second)
