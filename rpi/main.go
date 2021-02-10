@@ -1,11 +1,16 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/d2r2/go-i2c"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +24,10 @@ const (
 	OpSwitchUp
 	OpSwitchDown
 )
+
+const markFileNamePrefix = "tableHeight"
+const markFileNameHigh = markFileNamePrefix + "_high"
+const markFileNameLow = markFileNamePrefix + "_low"
 
 type TinyStatus struct {
 
@@ -112,34 +121,133 @@ func main() {
 }
 
 func executeCmdUp(cmd *cobra.Command, args []string) error {
-	// status := readTinyStatus()
+	maxHeight, err := readHeight(markFileNameHigh)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+	} else {
+		fmt.Printf("Table max height: %d\n", maxHeight)
+	}
+
+	for {
+		status, err := runSonarAndReadTinyStatus()
+		if err != nil {
+			return err
+		}
+
+		if status.sonarDistance >= maxHeight {
+			break
+		}
+
+		if err := sendOp(OpSwitchUp); err != nil {
+			return err
+		}
+		if err := sendOp(OpSwitchOn); err != nil {
+			return err
+		}
+	}
+
+	if err := sendOp(OpSwitchOff); err != nil {
+		fmt.Printf("Error on exit: %s\n", err.Error())
+	}
+
 	return nil
 }
 
 func executeCmdDown(cmd *cobra.Command, args []string) error {
+	minHeight, err := readHeight(markFileNameLow)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+	} else {
+		fmt.Printf("Table min height: %d\n", minHeight)
+	}
+
+	for {
+		status, err := runSonarAndReadTinyStatus()
+		if err != nil {
+			return err
+		}
+
+		if status.sonarDistance <= minHeight {
+			break
+		}
+
+		if err := sendOp(OpSwitchDown); err != nil {
+			return err
+		}
+		if err := sendOp(OpSwitchOn); err != nil {
+			return err
+		}
+	}
+
+	if err := sendOp(OpSwitchOff); err != nil {
+		fmt.Printf("Error on exit: %s\n", err.Error())
+	}
+
 	return nil
 }
 
 func executeCmdMarkHigh(cmd *cobra.Command, args []string) error {
+	status, err := runSonarAndReadTinyStatus()
+	if err != nil {
+		return err
+	}
+
+	if err := writeHeight(markFileNameHigh, status.sonarDistance); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func executeCmdMarkLow(cmd *cobra.Command, args []string) error {
+	status, err := runSonarAndReadTinyStatus()
+	if err != nil {
+		return err
+	}
+
+	if err := writeHeight(markFileNameLow, status.sonarDistance); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func executeCmdDebug(cmd *cobra.Command, args []string) error {
-	if err := sendOp(OpSonarRun); err != nil {
-		return err
-	}
-
-	time.Sleep(500 * time.Millisecond)
-
-	_, err := readTinyStatus()
+	_, err := runSonarAndReadTinyStatus()
 	if err != nil {
 		return err
 	}
+
+	maxHeight, err := readHeight(markFileNameHigh)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+	} else {
+		fmt.Printf("Table max height: %d\n", maxHeight)
+	}
+
+	minHeight, err := readHeight(markFileNameLow)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+	} else {
+		fmt.Printf("Table min height: %d\n", minHeight)
+	}
+
 	return nil
+}
+
+func runSonarAndReadTinyStatus() (*TinyStatus, error) {
+	if err := sendOp(OpSonarRun); err != nil {
+		return nil, err
+	}
+
+	time.Sleep(400 * time.Millisecond)
+
+	status, err := readTinyStatus()
+	if err != nil {
+		return nil, err
+	}
+
+	return status, nil
 }
 
 func readTinyStatus() (*TinyStatus, error) {
@@ -159,6 +267,41 @@ func readTinyStatus() (*TinyStatus, error) {
 	spew.Printf("Read tiny status: %v\n", status)
 
 	return status, nil
+}
+
+func readHeight(fileName string) (int, error) {
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return 0, errors.Errorf("Table height file %s does not exist", fileName)
+	}
+
+	bytes, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return 0, err
+	}
+
+	value, err := strconv.ParseInt(string(bytes), 10, 32)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(value), nil
+}
+
+func writeHeight(fileName string, value int) error {
+	f, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("%d", value))
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Height for file %s set at %d\n", fileName, value)
+
+	return nil
 }
 
 func sendOp(op Op) error {

@@ -8,6 +8,8 @@
 
 #define SONAR_MAX_DISTANCE 250 // cm
 
+#define MAX_SWITCH_ON_MILLIS 3000
+
 #define I2C_SLAVE_ADDRESS 0x4 // Address of the slave
 
 enum op {
@@ -33,6 +35,8 @@ bool sonar_run = false;
 bool switch_on = false;
 bool switch_up = false;
 
+unsigned long start_millis;
+
 /*
    Operations:
 
@@ -49,7 +53,7 @@ void setup()
   digitalWrite(SONAR_TRIGGER_PIN, LOW);
   digitalWrite(SWITCH_UP_PIN, LOW);
   digitalWrite(SWITCH_DOWN_PIN, LOW);
-  
+
   TinyWireS.begin(I2C_SLAVE_ADDRESS); // join i2c network
 
   TinyWireS.onReceive(receiveEvent);
@@ -70,6 +74,7 @@ void loop()
       sonar_run = true;
       break;
     case SWITCH_ON:
+      start_millis = millis();
       switch_on = true;
       break;
     case SWITCH_OFF:
@@ -89,6 +94,15 @@ void loop()
   if (sonar_run) {
     sonar_run = false;
     sonar_distance = sonar.ping_cm();
+  }
+
+  if (switch_on) {
+    unsigned long last_millis = millis();
+
+    if (last_millis - start_millis > MAX_SWITCH_ON_MILLIS) {
+      // For safety, the switch will be turned off after a while, if not asked to be on
+      switch_on = false;
+    }
   }
 
   if (switch_on) {
