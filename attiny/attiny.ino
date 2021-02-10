@@ -1,21 +1,37 @@
 #include <TinyWireS.h>
 #include <NewPing.h>
 
-#define SONAR_TRIGGER_PIN 5
-#define SONAR_ECHO_PIN 4
+#define SONAR_TRIGGER_PIN PB1
+#define SONAR_ECHO_PIN PB3
+#define SWITCH_UP_PIN PB4
+#define SWITCH_DOWN_PIN PB5
 
 #define SONAR_MAX_DISTANCE 250 // cm
 
 #define I2C_SLAVE_ADDRESS 0x4 // Address of the slave
 
+enum op {
+  NOOP = 0,
+  SONAR_RUN,
+  SWITCH_ON,
+  SWITCH_OFF,
+  SWITCH_UP,
+  SWITCH_DOWN
+};
+
 // Operation to execute, sent from rpi
-byte receive_op;
+op receive_op;
 
 // NewPing setup of pins and maximum distance.
 NewPing sonar(SONAR_TRIGGER_PIN, SONAR_ECHO_PIN, SONAR_MAX_DISTANCE);
 
+// --- Local vars
+
 // In any case, cannot be > SONAR_MAX_DISTANCE
-byte sonar_distance;
+byte sonar_distance = 0;
+bool sonar_run = false;
+bool switch_on = false;
+bool switch_up = false;
 
 /*
    Operations:
@@ -25,17 +41,20 @@ byte sonar_distance;
 
 void setup()
 {
+  pinMode(SONAR_TRIGGER_PIN, OUTPUT);
+  pinMode(SONAR_ECHO_PIN, INPUT);
+  pinMode(SWITCH_UP_PIN, OUTPUT);
+  pinMode(SWITCH_DOWN_PIN, OUTPUT);
+
+  digitalWrite(SONAR_TRIGGER_PIN, LOW);
+  digitalWrite(SWITCH_UP_PIN, LOW);
+  digitalWrite(SWITCH_DOWN_PIN, LOW);
+  
   TinyWireS.begin(I2C_SLAVE_ADDRESS); // join i2c network
 
   TinyWireS.onReceive(receiveEvent);
   TinyWireS.onRequest(requestEvent);
-
-  // Turn on LED when program starts
-  pinMode(1, OUTPUT);
-  digitalWrite(1, HIGH);
 }
-
-bool sonar_run = false;
 
 void loop()
 {
@@ -45,33 +64,54 @@ void loop()
      It will call the function registered via TinyWireS.onReceive(); if there is data in the buffer on stop.
   */
   TinyWireS_stop_check();
-  
+
   switch (receive_op) {
-    case 0:
-      digitalWrite(1, LOW);
-      break;
-    case 1:
-      digitalWrite(1, HIGH);
-      break;
-    case 2:
+    case SONAR_RUN:
       sonar_run = true;
+      break;
+    case SWITCH_ON:
+      switch_on = true;
+      break;
+    case SWITCH_OFF:
+      switch_on = false;
+      break;
+    case SWITCH_UP:
+      switch_up = true;
+      break;
+    case SWITCH_DOWN:
+      switch_up = false;
       break;
   }
 
   // Force reset
-  receive_op = -1;
+  receive_op = NOOP;
 
   if (sonar_run) {
     sonar_run = false;
     sonar_distance = sonar.ping_cm();
+  }
+
+  if (switch_on) {
+    if (switch_up) {
+      digitalWrite(SWITCH_UP_PIN, HIGH);
+      digitalWrite(SWITCH_DOWN_PIN, LOW);
+    } else {
+      digitalWrite(SWITCH_UP_PIN, LOW);
+      digitalWrite(SWITCH_DOWN_PIN, HIGH);
+    }
+  } else {
+    digitalWrite(SWITCH_UP_PIN, LOW);
+    digitalWrite(SWITCH_DOWN_PIN, LOW);
   }
 }
 
 // Gets called when the ATtiny receives an i2c request
 void requestEvent()
 {
-  // In any case, cannot be > SONAR_MAX_DISTANCE  
+  // In any case, cannot be > SONAR_MAX_DISTANCE
   TinyWireS.send(sonar_distance);
+  TinyWireS.send(switch_on);
+  TinyWireS.send(switch_up);
 }
 
 /**
@@ -87,20 +127,5 @@ void receiveEvent(uint8_t howMany) {
     return;
   }
 
-  receive_op = TinyWireS.receive();
+  receive_op = (op)TinyWireS.receive();
 }
-
-//
-//void setup() {
-//  //Initialisation of digital PINs
-//  pinMode(0, OUTPUT); //LED on Model B
-//  pinMode(1, OUTPUT); //LED on Model A or Pro
-//}
-//void loop() {
-//  digitalWrite(0, HIGH); //turns on LED
-//  digitalWrite(1, HIGH);
-//  delay(1000); //waits a second
-//  digitalWrite(0, LOW); //turns off LED
-//  digitalWrite(1, LOW);
-//delay(1000);
-//}
