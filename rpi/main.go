@@ -111,7 +111,7 @@ func init() {
 func main() {
 	// Try to lock for a while
 	locked := false
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 30; i++ {
 		if err := lock(); err != nil {
 			time.Sleep(150 * time.Millisecond)
 			continue
