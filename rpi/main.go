@@ -5,7 +5,9 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/d2r2/go-i2c"
@@ -111,6 +113,14 @@ func main() {
 		defer conn.Close()
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, os.Kill)
+	go func() {
+		for range c {
+			onExit()
+		}
+	}()
+
 	// Run CLI
 	{
 		err := Execute()
@@ -120,7 +130,15 @@ func main() {
 	}
 }
 
+func onExit() {
+	switchOff()
+
+	os.Exit(0)
+}
+
 func executeCmdUp(cmd *cobra.Command, args []string) error {
+	defer switchOff()
+
 	maxHeight, err := readHeight(markFileNameHigh)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err.Error())
@@ -134,6 +152,8 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
+		spew.Printf("Read tiny status: %v\n", status)
+
 		if status.sonarDistance >= maxHeight {
 			break
 		}
@@ -146,14 +166,38 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := sendOp(OpSwitchOff); err != nil {
-		fmt.Printf("Error on exit: %s\n", err.Error())
+	// Double check the position
+	for {
+		distance, err := runSonarAndReadDistanceAvg()
+		if err != nil {
+			return err
+		}
+
+		if distance > maxHeight {
+			// Go down a bit
+			if err := sendOp(OpSwitchDown); err != nil {
+				return err
+			}
+			if err := sendOp(OpSwitchOn); err != nil {
+				return err
+			}
+
+			time.Sleep(250 * time.Millisecond)
+
+			if err := sendOp(OpSwitchOff); err != nil {
+				return err
+			}
+		} else {
+			break
+		}
 	}
 
 	return nil
 }
 
 func executeCmdDown(cmd *cobra.Command, args []string) error {
+	defer switchOff()
+
 	minHeight, err := readHeight(markFileNameLow)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err.Error())
@@ -167,6 +211,8 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
+		spew.Printf("Read tiny status: %v\n", status)
+
 		if status.sonarDistance <= minHeight {
 			break
 		}
@@ -179,20 +225,48 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := sendOp(OpSwitchOff); err != nil {
-		fmt.Printf("Error on exit: %s\n", err.Error())
+	// Double check the position
+	for {
+		distance, err := runSonarAndReadDistanceAvg()
+		if err != nil {
+			return err
+		}
+
+		if distance < minHeight {
+			// Go up a bit
+			if err := sendOp(OpSwitchUp); err != nil {
+				return err
+			}
+			if err := sendOp(OpSwitchOn); err != nil {
+				return err
+			}
+
+			time.Sleep(250 * time.Millisecond)
+
+			if err := sendOp(OpSwitchOff); err != nil {
+				return err
+			}
+		} else {
+			break
+		}
 	}
 
 	return nil
 }
 
+func switchOff() {
+	if err := sendOp(OpSwitchOff); err != nil {
+		fmt.Printf("Error on switch off: %s\n", err.Error())
+	}
+}
+
 func executeCmdMarkHigh(cmd *cobra.Command, args []string) error {
-	status, err := runSonarAndReadTinyStatus()
+	distance, err := runSonarAndReadDistanceAvg()
 	if err != nil {
 		return err
 	}
 
-	if err := writeHeight(markFileNameHigh, status.sonarDistance); err != nil {
+	if err := writeHeight(markFileNameHigh, distance); err != nil {
 		return err
 	}
 
@@ -200,12 +274,12 @@ func executeCmdMarkHigh(cmd *cobra.Command, args []string) error {
 }
 
 func executeCmdMarkLow(cmd *cobra.Command, args []string) error {
-	status, err := runSonarAndReadTinyStatus()
+	distance, err := runSonarAndReadDistanceAvg()
 	if err != nil {
 		return err
 	}
 
-	if err := writeHeight(markFileNameLow, status.sonarDistance); err != nil {
+	if err := writeHeight(markFileNameLow, distance); err != nil {
 		return err
 	}
 
@@ -213,7 +287,7 @@ func executeCmdMarkLow(cmd *cobra.Command, args []string) error {
 }
 
 func executeCmdDebug(cmd *cobra.Command, args []string) error {
-	_, err := runSonarAndReadTinyStatus()
+	_, err := runSonarAndReadDistanceAvg()
 	if err != nil {
 		return err
 	}
@@ -240,7 +314,7 @@ func runSonarAndReadTinyStatus() (*TinyStatus, error) {
 		return nil, err
 	}
 
-	time.Sleep(400 * time.Millisecond)
+	time.Sleep(125 * time.Millisecond)
 
 	status, err := readTinyStatus()
 	if err != nil {
@@ -248,6 +322,28 @@ func runSonarAndReadTinyStatus() (*TinyStatus, error) {
 	}
 
 	return status, nil
+}
+
+func runSonarAndReadDistanceAvg() (int, error) {
+	avg := 0.0
+
+	// Make an average of all measurements
+	for i := 0; i < 5; i++ {
+		status, err := runSonarAndReadTinyStatus()
+		if err != nil {
+			return 0, err
+		}
+
+		if i == 0 {
+			avg = float64(status.sonarDistance)
+		} else {
+			avg = ((avg * float64(i)) + float64(status.sonarDistance)) / float64(i+1)
+		}
+	}
+
+	spew.Printf("Read distance avg: %f\n", avg)
+
+	return int(avg), nil
 }
 
 func readTinyStatus() (*TinyStatus, error) {
@@ -264,8 +360,6 @@ func readTinyStatus() (*TinyStatus, error) {
 	status.switchOn = bytes[1] > 0
 	status.switchUp = bytes[2] > 0
 
-	spew.Printf("Read tiny status: %v\n", status)
-
 	return status, nil
 }
 
@@ -279,7 +373,7 @@ func readHeight(fileName string) (int, error) {
 		return 0, err
 	}
 
-	value, err := strconv.ParseInt(string(bytes), 10, 32)
+	value, err := strconv.ParseInt(strings.TrimSpace(string(bytes)), 10, 32)
 	if err != nil {
 		return 0, err
 	}
@@ -308,42 +402,3 @@ func sendOp(op Op) error {
 	_, err := conn.WriteBytes([]byte{byte(op)})
 	return err
 }
-
-// func loopRead(conn *i2c.Options) {
-// 	for {
-//
-// 		{
-// 			// Read sonar value
-// 			bytes := []byte{0, 0}
-// 			numRead, err := conn.ReadBytes(bytes)
-// 			if err != nil {
-// 				log.Fatal(err)
-// 			}
-//
-// 			log.Printf("Read %d bytes\n", numRead)
-// 			if len(bytes) > 0 {
-// 				log.Printf("Value: %d", bytes[0])
-// 			}
-// 		}
-//
-// 		time.Sleep(250 * time.Millisecond)
-//
-// 	}
-// }
-//
-// func loop(conn *i2c.Options) {
-//
-// 	for {
-//
-// 		{
-// 			// Trigger sonar read
-// 			_, err := conn.WriteBytes([]byte{0x2})
-// 			if err != nil {
-// 				log.Fatal(err)
-// 			}
-// 		}
-//
-// 		time.Sleep(500 * time.Millisecond)
-//
-// 	}
-// }

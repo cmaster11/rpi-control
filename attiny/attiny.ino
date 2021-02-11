@@ -1,10 +1,11 @@
 #include <TinyWireS.h>
 #include <NewPing.h>
 
-#define SONAR_TRIGGER_PIN PB1
-#define SONAR_ECHO_PIN PB3
-#define SWITCH_UP_PIN PB4
-#define SWITCH_DOWN_PIN PB5
+// Manual mapping to physical pins
+#define SONAR_TRIGGER_PIN 4
+#define SONAR_ECHO_PIN 3
+#define SWITCH_UP_PIN 1
+#define SWITCH_DOWN_PIN 5
 
 #define SONAR_MAX_DISTANCE 250 // cm
 
@@ -51,8 +52,10 @@ void setup()
   pinMode(SWITCH_DOWN_PIN, OUTPUT);
 
   digitalWrite(SONAR_TRIGGER_PIN, LOW);
-  digitalWrite(SWITCH_UP_PIN, LOW);
-  digitalWrite(SWITCH_DOWN_PIN, LOW);
+
+  // The relays are connected on low
+  digitalWrite(SWITCH_UP_PIN, HIGH);
+  digitalWrite(SWITCH_DOWN_PIN, HIGH);
 
   TinyWireS.begin(I2C_SLAVE_ADDRESS); // join i2c network
 
@@ -107,15 +110,15 @@ void loop()
 
   if (switch_on) {
     if (switch_up) {
-      digitalWrite(SWITCH_UP_PIN, HIGH);
-      digitalWrite(SWITCH_DOWN_PIN, LOW);
-    } else {
       digitalWrite(SWITCH_UP_PIN, LOW);
       digitalWrite(SWITCH_DOWN_PIN, HIGH);
+    } else {
+      digitalWrite(SWITCH_UP_PIN, HIGH);
+      digitalWrite(SWITCH_DOWN_PIN, LOW);
     }
   } else {
-    digitalWrite(SWITCH_UP_PIN, LOW);
-    digitalWrite(SWITCH_DOWN_PIN, LOW);
+    digitalWrite(SWITCH_UP_PIN, HIGH);
+    digitalWrite(SWITCH_DOWN_PIN, HIGH);
   }
 }
 
