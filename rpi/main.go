@@ -125,12 +125,6 @@ func main() {
 		logrus.Fatal("Failed to lock")
 	}
 
-	defer func() {
-		if err := unlock(); err != nil {
-			logrus.Fatal(err)
-		}
-	}()
-
 	var err error
 
 	// Init i2c connection
@@ -145,7 +139,7 @@ func main() {
 	}
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, os.Kill)
+	signal.Notify(c, os.Interrupt)
 	go func() {
 		for range c {
 			onExit()
@@ -159,9 +153,15 @@ func main() {
 			logrus.Fatal(err)
 		}
 	}
+
+	onExit()
 }
 
 func onExit() {
+	if err := unlock(); err != nil {
+		logrus.Error(err)
+	}
+
 	switchOff()
 
 	os.Exit(0)
@@ -255,7 +255,7 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 				return err
 			}
 
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(1000 * time.Millisecond)
 
 			if err := sendOp(OpSwitchOff); err != nil {
 				return err
@@ -314,7 +314,7 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 				return err
 			}
 
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(1000 * time.Millisecond)
 
 			if err := sendOp(OpSwitchOff); err != nil {
 				return err
