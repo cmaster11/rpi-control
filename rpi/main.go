@@ -13,10 +13,11 @@ import (
 	"github.com/d2r2/go-i2c"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-type Op int
+type Op float64
 
 const (
 	OpSonarNoop Op = iota
@@ -39,7 +40,7 @@ type TinyStatus struct {
 	  TinyWireS.send(switch_up);
 	*/
 
-	sonarDistance int
+	sonarDistance float64
 	switchOn      bool
 	switchUp      bool
 }
@@ -78,6 +79,12 @@ var (
 		Short: "Just prints current values",
 		RunE:  executeCmdDebug,
 	}
+
+	printDistance = &cobra.Command{
+		Use:   "printDistance",
+		Short: "Just prints current distance",
+		RunE:  executeCmdPrintDistance,
+	}
 )
 
 var (
@@ -97,6 +104,7 @@ func init() {
 	rootCmd.AddCommand(markHighCmd)
 	rootCmd.AddCommand(markLowCmd)
 	rootCmd.AddCommand(debug)
+	rootCmd.AddCommand(printDistance)
 }
 
 func main() {
@@ -141,9 +149,9 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 
 	maxHeight, err := readHeight(markFileNameHigh)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
+		logrus.Debugf("Error: %s\n", err.Error())
 	} else {
-		fmt.Printf("Table max height: %d\n", maxHeight)
+		logrus.Debugf("Table max height: %f\n", maxHeight)
 	}
 
 	for {
@@ -152,7 +160,7 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		spew.Printf("Read tiny status: %v\n", status)
+		logrus.Print(spew.Sprintf("Read tiny status: %v\n", status))
 
 		if status.sonarDistance >= maxHeight {
 			break
@@ -200,9 +208,9 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 
 	minHeight, err := readHeight(markFileNameLow)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
+		logrus.Debugf("Error: %s\n", err.Error())
 	} else {
-		fmt.Printf("Table min height: %d\n", minHeight)
+		logrus.Debugf("Table min height: %f\n", minHeight)
 	}
 
 	for {
@@ -211,7 +219,7 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		spew.Printf("Read tiny status: %v\n", status)
+		logrus.Print(spew.Sprintf("Read tiny status: %v\n", status))
 
 		if status.sonarDistance <= minHeight {
 			break
@@ -256,7 +264,7 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 
 func switchOff() {
 	if err := sendOp(OpSwitchOff); err != nil {
-		fmt.Printf("Error on switch off: %s\n", err.Error())
+		logrus.Debugf("Error on switch off: %s\n", err.Error())
 	}
 }
 
@@ -294,17 +302,31 @@ func executeCmdDebug(cmd *cobra.Command, args []string) error {
 
 	maxHeight, err := readHeight(markFileNameHigh)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
+		logrus.Debugf("Error: %s\n", err.Error())
 	} else {
-		fmt.Printf("Table max height: %d\n", maxHeight)
+		logrus.Debugf("Table max height: %f\n", maxHeight)
 	}
 
 	minHeight, err := readHeight(markFileNameLow)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
+		logrus.Debugf("Error: %s\n", err.Error())
 	} else {
-		fmt.Printf("Table min height: %d\n", minHeight)
+		logrus.Debugf("Table min height: %f\n", minHeight)
 	}
+
+	return nil
+}
+
+func executeCmdPrintDistance(cmd *cobra.Command, args []string) error {
+	// Do not print other stuff
+	logrus.SetLevel(logrus.FatalLevel)
+
+	distance, err := runSonarAndReadDistanceAvg()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%f", distance)
 
 	return nil
 }
@@ -324,7 +346,7 @@ func runSonarAndReadTinyStatus() (*TinyStatus, error) {
 	return status, nil
 }
 
-func runSonarAndReadDistanceAvg() (int, error) {
+func runSonarAndReadDistanceAvg() (float64, error) {
 	avg := 0.0
 
 	// Make an average of all measurements
@@ -335,15 +357,15 @@ func runSonarAndReadDistanceAvg() (int, error) {
 		}
 
 		if i == 0 {
-			avg = float64(status.sonarDistance)
+			avg = status.sonarDistance
 		} else {
-			avg = ((avg * float64(i)) + float64(status.sonarDistance)) / float64(i+1)
+			avg = ((avg * float64(i)) + status.sonarDistance) / float64(i+1)
 		}
 	}
 
-	spew.Printf("Read distance avg: %f\n", avg)
+	logrus.Print(spew.Sprintf("Read distance avg: %f\n", avg))
 
-	return int(avg), nil
+	return avg, nil
 }
 
 func readTinyStatus() (*TinyStatus, error) {
@@ -356,14 +378,14 @@ func readTinyStatus() (*TinyStatus, error) {
 		return nil, err
 	}
 
-	status.sonarDistance = int(bytes[0])
+	status.sonarDistance = float64(bytes[0])
 	status.switchOn = bytes[1] > 0
 	status.switchUp = bytes[2] > 0
 
 	return status, nil
 }
 
-func readHeight(fileName string) (int, error) {
+func readHeight(fileName string) (float64, error) {
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
 		return 0, errors.Errorf("Table height file %s does not exist", fileName)
 	}
@@ -373,27 +395,27 @@ func readHeight(fileName string) (int, error) {
 		return 0, err
 	}
 
-	value, err := strconv.ParseInt(strings.TrimSpace(string(bytes)), 10, 32)
+	value, err := strconv.ParseFloat(strings.TrimSpace(string(bytes)), 64)
 	if err != nil {
 		return 0, err
 	}
 
-	return int(value), nil
+	return float64(value), nil
 }
 
-func writeHeight(fileName string, value int) error {
+func writeHeight(fileName string, value float64) error {
 	f, err := os.Create(fileName)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	_, err = f.WriteString(fmt.Sprintf("%d", value))
+	_, err = f.WriteString(fmt.Sprintf("%f", value))
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Height for file %s set at %d\n", fileName, value)
+	logrus.Debugf("Height for file %s set at %f\n", fileName, value)
 
 	return nil
 }
