@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
@@ -31,6 +30,8 @@ const (
 const markFileNamePrefix = "tableHeight"
 const markFileNameHigh = markFileNamePrefix + "_high"
 const markFileNameLow = markFileNamePrefix + "_low"
+
+const fileNameLock = markFileNamePrefix + "_lock"
 
 type TinyStatus struct {
 
@@ -108,6 +109,28 @@ func init() {
 }
 
 func main() {
+	// Try to lock for a while
+	locked := false
+	for i := 0; i < 10; i++ {
+		if err := lock(); err != nil {
+			time.Sleep(150 * time.Millisecond)
+			continue
+		}
+
+		locked = true
+		break
+	}
+
+	if !locked {
+		logrus.Fatal("Failed to lock")
+	}
+
+	defer func() {
+		if err := unlock(); err != nil {
+			logrus.Fatal(err)
+		}
+	}()
+
 	var err error
 
 	// Init i2c connection
@@ -115,7 +138,7 @@ func main() {
 		// Create a connection with attiny
 		conn, err = i2c.New(0x4, 1)
 		if err != nil {
-			log.Fatal(err)
+			logrus.Fatal(err)
 		}
 		// Free I2C connection on exit
 		defer conn.Close()
@@ -133,7 +156,7 @@ func main() {
 	{
 		err := Execute()
 		if err != nil {
-			log.Fatal(err)
+			logrus.Fatal(err)
 		}
 	}
 }
@@ -142,6 +165,48 @@ func onExit() {
 	switchOff()
 
 	os.Exit(0)
+}
+
+func lock() error {
+	_, err := os.Stat(fileNameLock)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// NOOP
+		} else {
+			return err
+		}
+	} else {
+		// If lock exists, error!
+		return errors.Errorf("Lock file already exists")
+	}
+
+	{
+		_, err := os.Create(fileNameLock)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func unlock() error {
+	_, err := os.Stat(fileNameLock)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		} else {
+			return err
+		}
+	} else {
+		// If lock exists, remove!
+		err := os.Remove(fileNameLock)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func executeCmdUp(cmd *cobra.Command, args []string) error {
@@ -176,7 +241,7 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 
 	// Double check the position
 	for {
-		distance, err := runSonarAndReadDistanceAvg()
+		distance, err := runSonarAndReadDistanceAvg(5)
 		if err != nil {
 			return err
 		}
@@ -235,7 +300,7 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 
 	// Double check the position
 	for {
-		distance, err := runSonarAndReadDistanceAvg()
+		distance, err := runSonarAndReadDistanceAvg(5)
 		if err != nil {
 			return err
 		}
@@ -269,7 +334,7 @@ func switchOff() {
 }
 
 func executeCmdMarkHigh(cmd *cobra.Command, args []string) error {
-	distance, err := runSonarAndReadDistanceAvg()
+	distance, err := runSonarAndReadDistanceAvg(10)
 	if err != nil {
 		return err
 	}
@@ -282,7 +347,7 @@ func executeCmdMarkHigh(cmd *cobra.Command, args []string) error {
 }
 
 func executeCmdMarkLow(cmd *cobra.Command, args []string) error {
-	distance, err := runSonarAndReadDistanceAvg()
+	distance, err := runSonarAndReadDistanceAvg(10)
 	if err != nil {
 		return err
 	}
@@ -295,7 +360,7 @@ func executeCmdMarkLow(cmd *cobra.Command, args []string) error {
 }
 
 func executeCmdDebug(cmd *cobra.Command, args []string) error {
-	_, err := runSonarAndReadDistanceAvg()
+	_, err := runSonarAndReadDistanceAvg(5)
 	if err != nil {
 		return err
 	}
@@ -321,7 +386,7 @@ func executeCmdPrintDistance(cmd *cobra.Command, args []string) error {
 	// Do not print other stuff
 	logrus.SetLevel(logrus.FatalLevel)
 
-	distance, err := runSonarAndReadDistanceAvg()
+	distance, err := runSonarAndReadDistanceAvg(5)
 	if err != nil {
 		return err
 	}
@@ -336,7 +401,7 @@ func runSonarAndReadTinyStatus() (*TinyStatus, error) {
 		return nil, err
 	}
 
-	time.Sleep(125 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 
 	status, err := readTinyStatus()
 	if err != nil {
@@ -346,11 +411,11 @@ func runSonarAndReadTinyStatus() (*TinyStatus, error) {
 	return status, nil
 }
 
-func runSonarAndReadDistanceAvg() (float64, error) {
+func runSonarAndReadDistanceAvg(runs int) (float64, error) {
 	avg := 0.0
 
 	// Make an average of all measurements
-	for i := 0; i < 5; i++ {
+	for i := 0; i < runs; i++ {
 		status, err := runSonarAndReadTinyStatus()
 		if err != nil {
 			return 0, err
