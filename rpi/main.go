@@ -151,7 +151,7 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		logrus.Debugf("Error: %s\n", err.Error())
 	} else {
-		logrus.Debugf("Table max height: %f\n", maxHeight)
+		logrus.Debugf("Table max height: %.1f\n", maxHeight)
 	}
 
 	for {
@@ -210,7 +210,7 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		logrus.Debugf("Error: %s\n", err.Error())
 	} else {
-		logrus.Debugf("Table min height: %f\n", minHeight)
+		logrus.Debugf("Table min height: %.1f\n", minHeight)
 	}
 
 	for {
@@ -304,14 +304,14 @@ func executeCmdDebug(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		logrus.Debugf("Error: %s\n", err.Error())
 	} else {
-		logrus.Debugf("Table max height: %f\n", maxHeight)
+		logrus.Debugf("Table max height: %.1f\n", maxHeight)
 	}
 
 	minHeight, err := readHeight(markFileNameLow)
 	if err != nil {
 		logrus.Debugf("Error: %s\n", err.Error())
 	} else {
-		logrus.Debugf("Table min height: %f\n", minHeight)
+		logrus.Debugf("Table min height: %.1f\n", minHeight)
 	}
 
 	return nil
@@ -326,7 +326,7 @@ func executeCmdPrintDistance(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("%f", distance)
+	fmt.Printf("%.1f", distance)
 
 	return nil
 }
@@ -363,7 +363,7 @@ func runSonarAndReadDistanceAvg() (float64, error) {
 		}
 	}
 
-	logrus.Print(spew.Sprintf("Read distance avg: %f\n", avg))
+	logrus.Print(spew.Sprintf("Read distance avg: %.1f\n", avg))
 
 	return avg, nil
 }
@@ -410,12 +410,12 @@ func writeHeight(fileName string, value float64) error {
 	}
 	defer f.Close()
 
-	_, err = f.WriteString(fmt.Sprintf("%f", value))
+	_, err = f.WriteString(fmt.Sprintf("%.1f", value))
 	if err != nil {
 		return err
 	}
 
-	logrus.Debugf("Height for file %s set at %f\n", fileName, value)
+	logrus.Debugf("Height for file %s set at %.1f\n", fileName, value)
 
 	return nil
 }
