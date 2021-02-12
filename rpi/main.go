@@ -401,7 +401,7 @@ func runSonarAndReadTinyStatus() (*TinyStatus, error) {
 		return nil, err
 	}
 
-	time.Sleep(250 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	status, err := readTinyStatus()
 	if err != nil {
