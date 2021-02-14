@@ -4,6 +4,7 @@
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
+      <env name="PYTHONUNBUFFERED" value="1" />
       <env name="DISPLAY" value=":0.0" />
     </envs>
     <option name="SDK_HOME" value="" />
@@ -19,6 +20,8 @@
     <option name="MODULE_MODE" value="false" />
     <option name="REDIRECT_INPUT" value="false" />
     <option name="INPUT_FILE" value="" />
-    <method v="2" />
+    <method v="2">
+      <option name="RemoteToolBeforeRunTask" enabled="true" actionId="RemoteTool_Remote Tools_rpi-pull" />
+    </method>
   </configuration>
 </component>

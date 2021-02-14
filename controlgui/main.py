@@ -18,7 +18,7 @@ def run_bash_script(path):
     base_path = "/home/pi/code/rpi-control/scripts"
     full_path = base_path + path
 
-    args = ['bash', '-c', full_path]
+    args = ['bash', full_path]
 
     print('Executing ' + ' '.join(args))
 
@@ -71,6 +71,8 @@ class Window(Gtk.Window):
         # --- Buttons
 
         flowbox.add(get_button('cmaster11-HURR On!', '/wol-cmaster11-hurr.sh'))
+        flowbox.add(get_button('Table Up!', '/table-up.sh'))
+        flowbox.add(get_button('Table Down!', '/table-down.sh'))
 
         # --- END Buttons
 
