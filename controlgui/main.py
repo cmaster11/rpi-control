@@ -16,15 +16,20 @@ def run_bash_script(path):
     (pipe_r, pipe_w) = os.pipe()
 
     base_path = "/home/pi/code/rpi-control/scripts"
+    full_path = base_path + path
 
-    p = subprocess.Popen(['bash', '-c', base_path + path],
-                         shell=True,
+    args = ['bash', '-c', full_path]
+
+    print('Executing ' + ' '.join(args))
+
+    p = subprocess.Popen(args,
+                         shell=False,
                          stdout=pipe_w,
                          stderr=pipe_w)
 
     # Loop while the process is executing
     while p.poll() is None:
-        # Loop long as the selct mechanism indicates there
+        # Loop long as the select mechanism indicates there
         # is data to be read from the buffer
         while len(select.select([pipe_r], [], [], 0)[0]) == 1:
             # Read up to a 1 KB chunk of data
@@ -36,15 +41,19 @@ def run_bash_script(path):
     os.close(pipe_r)
     os.close(pipe_w)
 
+    print(f'Command returned {p.returncode}')
+
 
 def get_button(label, script_path):
     button = Gtk.Button.new_with_label(label)
     button.set_property("height-request", 60)
 
-    def handler():
+    def handler(_):
         run_bash_script(script_path)
 
     button.connect("clicked", handler)
+
+    return button
 
 
 class Window(Gtk.Window):
@@ -60,10 +69,6 @@ class Window(Gtk.Window):
         flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
 
         # --- Buttons
-
-        btn_cmaster11_hurr_on = Gtk.Button.new_with_label("cmaster11-HURR On!")
-        btn_cmaster11_hurr_on.set_property("height-request", 60)
-        btn_cmaster11_hurr_on.connect("clicked", self.click_btn_cmaster11_hurr_on)
 
         flowbox.add(get_button('cmaster11-HURR On!', '/wol-cmaster11-hurr.sh'))
 
