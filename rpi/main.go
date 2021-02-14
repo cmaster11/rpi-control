@@ -225,6 +225,7 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 	maxHeight, err := readHeight(markFileNameHigh)
 	if err != nil {
 		logrus.Debugf("Error: %s\n", err.Error())
+		return err
 	} else {
 		logrus.Debugf("Table max height: %.1f\n", maxHeight)
 	}
@@ -303,6 +304,7 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 	minHeight, err := readHeight(markFileNameLow)
 	if err != nil {
 		logrus.Debugf("Error: %s\n", err.Error())
+		return err
 	} else {
 		logrus.Debugf("Table min height: %.1f\n", minHeight)
 	}

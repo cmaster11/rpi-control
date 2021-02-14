@@ -1,3 +1,3 @@
 #!/bin/bash
 
-/home/pi/ftp/rpi down
+exec /home/pi/ftp/rpi down

@@ -15,14 +15,18 @@ def run_bash_script(path):
     # create a pipe to receive stdout and stderr from process
     (pipe_r, pipe_w) = os.pipe()
 
+    working_dir = '/home/pi'
     base_path = "/home/pi/code/rpi-control/scripts"
     full_path = base_path + path
 
-    args = ['bash', full_path]
+    args = ['lxterminal', '--command', '/bin/bash ' + full_path]
+
+    # lxterminal --command="/bin/bash -c '/home/pi/files.sh; read'"
 
     print('Executing ' + ' '.join(args))
 
     p = subprocess.Popen(args,
+                         cwd=working_dir,
                          shell=False,
                          stdout=pipe_w,
                          stderr=pipe_w)
@@ -59,7 +63,7 @@ def get_button(label, script_path):
 class Window(Gtk.Window):
 
     def __init__(self):
-        Gtk.Window.__init__(self, title="My Hello World Program")
+        Gtk.Window.__init__(self, title="rPI Control")
         Gtk.Window.set_default_size(self, 400, 325)
         Gtk.Window.move(self, 0, 0)
 
@@ -71,8 +75,12 @@ class Window(Gtk.Window):
         # --- Buttons
 
         flowbox.add(get_button('cmaster11-HURR On!', '/wol-cmaster11-hurr.sh'))
-        flowbox.add(get_button('Table Up!', '/table-up.sh'))
-        flowbox.add(get_button('Table Down!', '/table-down.sh'))
+
+        table_box = Gtk.Box(spacing=6)
+        table_box.add(get_button('Table Up!', '/table-up.sh'))
+        table_box.add(get_button('Table Down!', '/table-down.sh'))
+
+        flowbox.add(table_box)
 
         # --- END Buttons
 
