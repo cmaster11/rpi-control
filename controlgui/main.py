@@ -1,5 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+import os
+import select
+import subprocess
 
 import gi
 
@@ -7,20 +10,67 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
 
 
+# https://gist.github.com/mckaydavis/e96c1637d02bcf8a78e7
+def run_bash_script(path):
+    # create a pipe to receive stdout and stderr from process
+    (pipe_r, pipe_w) = os.pipe()
+
+    base_path = "/home/pi/code/rpi-control/scripts"
+
+    p = subprocess.Popen(['bash', '-c', base_path + path],
+                         shell=True,
+                         stdout=pipe_w,
+                         stderr=pipe_w)
+
+    # Loop while the process is executing
+    while p.poll() is None:
+        # Loop long as the selct mechanism indicates there
+        # is data to be read from the buffer
+        while len(select.select([pipe_r], [], [], 0)[0]) == 1:
+            # Read up to a 1 KB chunk of data
+            buf = os.read(pipe_r, 1024)
+            # Stream data to our stdout's fd of 0
+            os.write(0, buf)
+
+    # cleanup
+    os.close(pipe_r)
+    os.close(pipe_w)
+
+
+def get_button(label, script_path):
+    button = Gtk.Button.new_with_label(label)
+    button.set_property("height-request", 60)
+
+    def handler():
+        run_bash_script(script_path)
+
+    button.connect("clicked", handler)
+
+
 class Window(Gtk.Window):
 
     def __init__(self):
         Gtk.Window.__init__(self, title="My Hello World Program")
         Gtk.Window.set_default_size(self, 400, 325)
-        Gtk.Window.set_position(self, Gtk.WindowPosition.CENTER)
+        Gtk.Window.move(self, 0, 0)
 
-        button1 = Gtk.Button("Hello, World!")
-        button1.connect("clicked", self.whenbutton1_clicked)
+        flowbox = Gtk.FlowBox()
+        flowbox.set_valign(Gtk.Align.START)
+        flowbox.set_max_children_per_line(4)
+        flowbox.set_selection_mode(Gtk.SelectionMode.NONE)
 
-        self.add(button1)
+        # --- Buttons
 
-    def whenbutton1_clicked(self, button):
-        print("Hello, World!")
+        btn_cmaster11_hurr_on = Gtk.Button.new_with_label("cmaster11-HURR On!")
+        btn_cmaster11_hurr_on.set_property("height-request", 60)
+        btn_cmaster11_hurr_on.connect("clicked", self.click_btn_cmaster11_hurr_on)
+
+        flowbox.add(get_button('cmaster11-HURR On!', '/wol-cmaster11-hurr.sh'))
+
+        # --- END Buttons
+
+        self.add(flowbox)
+        self.show_all()
 
 
 Gtk.init()
