@@ -79,6 +79,7 @@ class Window(Gtk.Window):
         table_box = Gtk.Box(spacing=6)
         table_box.add(get_button('Table Up!', '/table-up.sh'))
         table_box.add(get_button('Table Down!', '/table-down.sh'))
+        table_box.add(get_button('Clear lock', '/table-clear-lock.sh'))
 
         flowbox.add(table_box)
 
