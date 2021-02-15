@@ -1,5 +1,6 @@
-#include <TinyWireS.h>
-#include <NewPing.h>
+#include "./libs/TinyWireS/usiTwiSlave.c"
+#include "./libs/TinyWireS/TinyWireS.cpp"
+#include "./libs/NewPing/src/NewPing.cpp"
 
 // Manual mapping to physical pins
 #define SONAR_TRIGGER_PIN 4
@@ -24,19 +25,21 @@ enum op {
 
 // Operation to execute, sent from rpi
 op receive_op;
+op last_receive_op;
 
 // NewPing setup of pins and maximum distance.
-NewPing sonar(SONAR_TRIGGER_PIN, SONAR_ECHO_PIN, SONAR_MAX_DISTANCE);
+// NewPing sonar(SONAR_TRIGGER_PIN, SONAR_ECHO_PIN, SONAR_MAX_DISTANCE);
 
 // --- Local vars
 
-// In any case, cannot be > SONAR_MAX_DISTANCE
-byte sonar_distance = 0;
+unsigned long sonar_distance = 0;
 bool sonar_run = false;
 bool switch_on = false;
 bool switch_up = false;
 
 unsigned long start_millis;
+unsigned long sonar_max_echo_time;
+unsigned long sonar_max_time;
 
 /*
    Operations:
@@ -57,21 +60,17 @@ void setup()
   digitalWrite(SWITCH_UP_PIN, HIGH);
   digitalWrite(SWITCH_DOWN_PIN, HIGH);
 
-  TinyWireS.begin(I2C_SLAVE_ADDRESS); // join i2c network
+  // Sonar setup
+  sonar_max_echo_time = min(SONAR_MAX_DISTANCE, MAX_SENSOR_DISTANCE) * US_ROUNDTRIP_CM + (US_ROUNDTRIP_CM / 2);
 
+  // I2C
+  TinyWireS.begin(I2C_SLAVE_ADDRESS); // join i2c network
   TinyWireS.onReceive(receiveEvent);
   TinyWireS.onRequest(requestEvent);
 }
 
 void loop()
 {
-  /**
-     This is the only way we can detect stop condition (http://www.avrfreaks.net/index.php?name=PNphpBB2&file=viewtopic&p=984716&sid=82e9dc7299a8243b86cf7969dd41b5b5#984716)
-     it needs to be called in a very tight loop in order not to miss any (REMINDER: Do *not* use delay() anywhere, use tws_delay() instead).
-     It will call the function registered via TinyWireS.onReceive(); if there is data in the buffer on stop.
-  */
-  TinyWireS_stop_check();
-
   switch (receive_op) {
     case SONAR_RUN:
       sonar_run = true;
@@ -96,7 +95,7 @@ void loop()
 
   if (sonar_run) {
     sonar_run = false;
-    sonar_distance = sonar.ping_cm();
+    sonar_distance = sonarPing();
   }
 
   if (switch_on) {
@@ -120,15 +119,57 @@ void loop()
     digitalWrite(SWITCH_UP_PIN, HIGH);
     digitalWrite(SWITCH_DOWN_PIN, HIGH);
   }
+
+  TinyWireS_stop_check();
+}
+
+bool sonarTriggerPing() {
+  digitalWrite(SONAR_TRIGGER_PIN, LOW);   // Set the trigger pin low, should already be low, but this will make sure it is.
+  delayMicroseconds(4);             // Wait for pin to go low.
+  digitalWrite(SONAR_TRIGGER_PIN, HIGH);  // Set trigger pin high, this tells the sensor to send out a ping.
+  delayMicroseconds(10);            // Wait long enough for the sensor to realize the trigger pin is high. Sensor specs say to wait 10uS.
+  digitalWrite(SONAR_TRIGGER_PIN, LOW);   // Set trigger pin back to low.
+
+  if (digitalRead(SONAR_ECHO_PIN)) {
+    return false;     // Previous ping hasn't finished, abort.
+  }
+
+  sonar_max_time = micros() + sonar_max_echo_time + MAX_SENSOR_DELAY; // Maximum time we'll wait for ping to start (most sensors are <450uS, the SRF06 can take up to 34,300uS!)
+
+  // Wait for ping to start.
+  while (!digitalRead(SONAR_ECHO_PIN)) {
+    // Took too long to start, abort.
+    if (micros() > sonar_max_time) return false;
+  }
+
+  sonar_max_time = micros() + sonar_max_echo_time; // Ping started, set the time-out.
+  return true;                         // Ping started successfully.
+}
+
+unsigned long sonarPing() {
+  if (!sonarTriggerPing()) return NO_ECHO; // Trigger a ping, if it returns false, return NO_ECHO to the calling function.
+  // Wait for the ping echo.
+  while (digitalRead(SONAR_ECHO_PIN))  {
+    if (micros() > sonar_max_time) return NO_ECHO; // Stop the loop and return NO_ECHO (false) if we're beyond the set maximum distance.
+  }
+  return (micros() - (sonar_max_time - sonar_max_echo_time) - PING_OVERHEAD); // Calculate ping time, include overhead.
 }
 
 // Gets called when the ATtiny receives an i2c request
 void requestEvent()
 {
-  // In any case, cannot be > SONAR_MAX_DISTANCE
-  TinyWireS.send(sonar_distance);
+  unsigned long to_send = sonar_distance;
+
+  // unsigned int value = 0x1234;
+
+  TinyWireS.send(to_send & 0xFF);
+  TinyWireS.send((to_send >> 8) & 0xFF);
+  TinyWireS.send((to_send >> 16) & 0xFF);
+  TinyWireS.send((to_send >> 24) & 0xFF);
+
   TinyWireS.send(switch_on);
   TinyWireS.send(switch_up);
+  TinyWireS.send(last_receive_op);
 }
 
 /**
@@ -145,4 +186,5 @@ void receiveEvent(uint8_t howMany) {
   }
 
   receive_op = (op)TinyWireS.receive();
+  last_receive_op = receive_op;
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type Op float64
+type Op int
 
 const (
 	OpSonarNoop Op = iota
@@ -26,6 +26,8 @@ const (
 	OpSwitchUp
 	OpSwitchDown
 )
+
+const sonarRoundTripUS = 57.0
 
 const markFileNamePrefix = "tableHeight"
 const markFileNameHigh = markFileNamePrefix + "_high"
@@ -41,9 +43,11 @@ type TinyStatus struct {
 	  TinyWireS.send(switch_up);
 	*/
 
-	sonarDistance float64
-	switchOn      bool
-	switchUp      bool
+	sonarDistance   float64
+	sonarDistanceUS int64
+	switchOn        bool
+	switchUp        bool
+	lastOperation   Op
 }
 
 var (
@@ -142,7 +146,8 @@ func main() {
 		// Create a connection with attiny
 		conn, err = i2c.New(0x4, 1)
 		if err != nil {
-			logrus.Fatal(err)
+			logrus.Error(err)
+			return
 		}
 		// Free I2C connection on exit
 		defer conn.Close()
@@ -160,7 +165,8 @@ func main() {
 	{
 		err := Execute()
 		if err != nil {
-			logrus.Fatal(err)
+			logrus.Error(err)
+			return
 		}
 	}
 
@@ -439,7 +445,7 @@ func executeCmdPrintLoop(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		logrus.Debugf("Current distance: %.1f\n", status.sonarDistance)
+		logrus.Debugf("Current distance: %.1f (uS: %d, hex: %#X)\n", status.sonarDistance, status.sonarDistanceUS, status.sonarDistanceUS)
 
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -506,15 +512,26 @@ func readTinyStatus() (*TinyStatus, error) {
 	status := &TinyStatus{}
 
 	// Read values
-	bytes := []byte{0, 0, 0}
+	bytes := []byte{0, 0, 0, 0, 0, 0, 0}
 	_, err := conn.ReadBytes(bytes)
 	if err != nil {
 		return nil, err
 	}
 
-	status.sonarDistance = float64(bytes[0])
-	status.switchOn = bytes[1] > 0
-	status.switchUp = bytes[2] > 0
+	byteIndexRest := 4
+
+	logrus.Debug(spew.Sprintf("Read tiny status bytes: %v\n", bytes))
+
+	distanceUS := int64(bytes[0]) + (int64(bytes[1]) << 8) + (int64(bytes[2]) << 16) + (int64(bytes[3]) << 24)
+
+	status.sonarDistanceUS = distanceUS
+	status.sonarDistance = float64(distanceUS) / sonarRoundTripUS
+
+	status.switchOn = bytes[byteIndexRest] > 0
+	status.switchUp = bytes[byteIndexRest+1] > 0
+	status.lastOperation = Op(bytes[byteIndexRest+2])
+
+	logrus.Debug(spew.Sprintf("Read tiny status: %v\n", status))
 
 	return status, nil
 }
