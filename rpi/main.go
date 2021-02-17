@@ -260,47 +260,6 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Double check the position
-	for {
-		distance, err := runSonarAndReadDistanceAvg(5, false)
-		if err != nil {
-			return err
-		}
-
-		if distance > maxHeight {
-			// Go down a bit
-			if err := sendOp(OpSwitchDown); err != nil {
-				return err
-			}
-			if err := sendOp(OpSwitchOn); err != nil {
-				return err
-			}
-
-			time.Sleep(1000 * time.Millisecond)
-
-			if err := sendOp(OpSwitchOff); err != nil {
-				return err
-			}
-		} else if distance < maxHeight-2 {
-			// Too low!
-			// Go up a bit
-			if err := sendOp(OpSwitchUp); err != nil {
-				return err
-			}
-			if err := sendOp(OpSwitchOn); err != nil {
-				return err
-			}
-
-			time.Sleep(1000 * time.Millisecond)
-
-			if err := sendOp(OpSwitchOff); err != nil {
-				return err
-			}
-		} else {
-			break
-		}
-	}
-
 	return nil
 }
 
@@ -339,47 +298,6 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Double check the position
-	for {
-		distance, err := runSonarAndReadDistanceAvg(5, false)
-		if err != nil {
-			return err
-		}
-
-		if distance < minHeight {
-			// Go up a bit
-			if err := sendOp(OpSwitchUp); err != nil {
-				return err
-			}
-			if err := sendOp(OpSwitchOn); err != nil {
-				return err
-			}
-
-			time.Sleep(1000 * time.Millisecond)
-
-			if err := sendOp(OpSwitchOff); err != nil {
-				return err
-			}
-		} else if distance > minHeight+2 {
-			// Too high
-			// Go down a bit
-			if err := sendOp(OpSwitchDown); err != nil {
-				return err
-			}
-			if err := sendOp(OpSwitchOn); err != nil {
-				return err
-			}
-
-			time.Sleep(1000 * time.Millisecond)
-
-			if err := sendOp(OpSwitchOff); err != nil {
-				return err
-			}
-		} else {
-			break
-		}
-	}
-
 	return nil
 }
 
@@ -416,7 +334,7 @@ func executeCmdMarkLow(cmd *cobra.Command, args []string) error {
 }
 
 func executeCmdDebug(cmd *cobra.Command, args []string) error {
-	_, err := runSonarAndReadDistanceAvg(5, true)
+	_, err := runSonarAndReadDistanceAvg(1, true)
 	if err != nil {
 		return err
 	}
@@ -512,17 +430,17 @@ func readTinyStatus() (*TinyStatus, error) {
 	status := &TinyStatus{}
 
 	// Read values
-	bytes := []byte{0, 0, 0, 0, 0, 0, 0}
+	bytes := []byte{0, 0, 0, 0, 0}
 	_, err := conn.ReadBytes(bytes)
 	if err != nil {
 		return nil, err
 	}
 
-	byteIndexRest := 4
+	byteIndexRest := 2
 
 	logrus.Debug(spew.Sprintf("Read tiny status bytes: %v\n", bytes))
 
-	distanceUS := int64(bytes[0]) + (int64(bytes[1]) << 8) + (int64(bytes[2]) << 16) + (int64(bytes[3]) << 24)
+	distanceUS := int64(bytes[0]) + (int64(bytes[1]) << 8)
 
 	status.sonarDistanceUS = distanceUS
 	status.sonarDistance = float64(distanceUS) / sonarRoundTripUS
