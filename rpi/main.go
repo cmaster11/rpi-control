@@ -28,6 +28,7 @@ const (
 )
 
 const sonarRoundTripUS = 57.0
+const tableHeightTolerance = 0.4
 
 const markFileNamePrefix = "tableHeight"
 const markFileNameHigh = markFileNamePrefix + "_high"
@@ -267,7 +268,7 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		if distance > maxHeight {
+		if distance > maxHeight+tableHeightTolerance {
 			// Go down a bit
 			if err := sendOp(OpSwitchDown); err != nil {
 				return err
@@ -276,12 +277,12 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 				return err
 			}
 
-			time.Sleep(1000 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 
 			if err := sendOp(OpSwitchOff); err != nil {
 				return err
 			}
-		} else if distance < maxHeight-2 {
+		} else if distance < maxHeight-tableHeightTolerance {
 			// Too low!
 			// Go up a bit
 			if err := sendOp(OpSwitchUp); err != nil {
@@ -291,7 +292,7 @@ func executeCmdUp(cmd *cobra.Command, args []string) error {
 				return err
 			}
 
-			time.Sleep(1000 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 
 			if err := sendOp(OpSwitchOff); err != nil {
 				return err
@@ -346,7 +347,7 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		if distance < minHeight {
+		if distance < minHeight-tableHeightTolerance {
 			// Go up a bit
 			if err := sendOp(OpSwitchUp); err != nil {
 				return err
@@ -355,12 +356,12 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 				return err
 			}
 
-			time.Sleep(1000 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 
 			if err := sendOp(OpSwitchOff); err != nil {
 				return err
 			}
-		} else if distance > minHeight+2 {
+		} else if distance > minHeight+tableHeightTolerance {
 			// Too high
 			// Go down a bit
 			if err := sendOp(OpSwitchDown); err != nil {
@@ -370,7 +371,7 @@ func executeCmdDown(cmd *cobra.Command, args []string) error {
 				return err
 			}
 
-			time.Sleep(1000 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
 
 			if err := sendOp(OpSwitchOff); err != nil {
 				return err
@@ -416,7 +417,7 @@ func executeCmdMarkLow(cmd *cobra.Command, args []string) error {
 }
 
 func executeCmdDebug(cmd *cobra.Command, args []string) error {
-	_, err := runSonarAndReadDistanceAvg(1, true)
+	_, err := runSonarAndReadDistanceAvg(5, true)
 	if err != nil {
 		return err
 	}
