@@ -165,14 +165,14 @@
 	#define US_ROUNDTRIP_CM 57      // Microseconds (uS) it takes sound to travel round-trip 1cm (2cm total), uses integer to save compiled code space. Default=57
 	#define US_ROUNDTRIP_IN 146     // Microseconds (uS) it takes sound to travel round-trip 1 inch (2 inches total), uses integer to save compiled code space. Defalult=146
 	#define ONE_PIN_ENABLED true    // Set to "false" to disable one pin mode which saves around 14-26 bytes of binary size. Default=true
-	#define ROUNDING_ENABLED false  // Set to "true" to enable distance rounding which also adds 64 bytes to binary size. Default=false
+	#define ROUNDING_ENABLED true  // Set to "true" to enable distance rounding which also adds 64 bytes to binary size. Default=false
 	#define URM37_ENABLED false     // Set to "true" to enable support for the URM37 sensor in PWM mode. Default=false
 	#define TIMER_ENABLED true      // Set to "false" to disable the timer ISR (if getting "__vector_7" compile errors set this to false). Default=true
 
 	// Probably shouldn't change these values unless you really know what you're doing.
 	#define NO_ECHO 0               // Value returned if there's no ping echo within the specified MAX_SENSOR_DISTANCE or max_cm_distance. Default=0
 	#define MAX_SENSOR_DELAY 5800   // Maximum uS it takes for sensor to start the ping. Default=5800
-	#define ECHO_TIMER_FREQ 24      // Frequency to check for a ping echo (every 24uS is about 0.4cm accuracy). Default=24
+	#define ECHO_TIMER_FREQ       // Frequency to check for a ping echo (every 24uS is about 0.4cm accuracy). Default=24
 	#define PING_MEDIAN_DELAY 29000 // Microsecond delay between pings in the ping_median method. Default=29000
 	#define PING_OVERHEAD 5         // Ping overhead in microseconds (uS). Default=5
 	#define PING_TIMER_OVERHEAD 13  // Ping timer overhead in microseconds (uS). Default=13
